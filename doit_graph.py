@@ -7,6 +7,7 @@ Copyright (c) 2018-present Eduardo Naufel Schettino & contributors
 
 __version__ = (0, 3, 0)
 
+import pathlib
 from collections import deque
 
 import pygraphviz
@@ -14,6 +15,7 @@ import pygraphviz
 from doit.cmd_base import DoitCmdBase
 from doit.control import TaskControl
 
+# TODO add option for data nodes (file_dep, targets)
 
 opt_subtasks = {
     'name': 'subtasks',
@@ -51,6 +53,12 @@ opt_outfile = {
     'help': 'name of generated dot-file',
 }
 
+node_attrs = {
+        "task": {"color": "lightblue2", "style": "filled"},
+        "file_dep": {"color": "orange", "style": "filled"},
+        "target": {"color": "green", "style": "filled"},
+}
+
 
 
 class GraphCmd(DoitCmdBase):
@@ -74,7 +82,7 @@ Website/docs: https://github.com/pydoit/doit-graph
     cmd_options = (opt_subtasks, opt_outfile, opt_reverse, opt_horizontal)
 
 
-    def node(self, task_name):
+    def task_node(self, task_name):
         """get graph node that should represent for task_name
 
         :param task_name:
@@ -85,13 +93,28 @@ Website/docs: https://github.com/pydoit/doit-graph
         return task.subtask_of or task_name
 
 
+    def data_node(self, f):
+        """get graph node that represents file dependency or target
+
+        :param f:
+        """
+        p = pathlib.Path(f)
+        return p.name
+
+
     def add_edge(self, src_name, sink_name, arrowhead):
-        source = self.node(src_name)
-        sink = self.node(sink_name)
+        source = self.task_node(src_name)
+        sink = self.task_node(sink_name)
         if source != sink and (source, sink) not in self._edges:
             self._edges.add((source, sink))
             self.graph.add_edge(source, sink, arrowhead=arrowhead)
 
+    def add_data_edge(self, src_name, sink_name, arrowhead):
+        source = self.task_node(src_name)
+        sink = self.data_node(sink_name)
+        if (source, sink) not in self._edges:
+            self._edges.add((source, sink))
+            self.graph.add_edge(source, sink, arrowhead=arrowhead)
 
     def _execute(self, subtasks, reverse, horizontal, outfile, pos_args=None):
         # init
@@ -102,8 +125,6 @@ Website/docs: https://github.com/pydoit/doit-graph
 
         # create graph
         self.graph = pygraphviz.AGraph(strict=False, directed=True)
-        self.graph.node_attr['color'] = 'lightblue2'
-        self.graph.node_attr['style'] = 'filled'
 
         if (horizontal):
             self.graph.graph_attr.update(rankdir='LR')
@@ -121,14 +142,27 @@ Website/docs: https://github.com/pydoit/doit-graph
                 continue
             processed.add(task.name)
 
-            # add nodes
-            node_attrs = {}
+            # add task nodes
+            task_node_attrs = {}
+            task_node_attrs.update(node_attrs["task"])
             if task.has_subtask:
-                node_attrs['peripheries'] = '2'
+                task_node_attrs['peripheries'] = '2'
             if (not task.subtask_of) or subtasks:
-                self.graph.add_node(task.name, **node_attrs)
+                self.graph.add_node(task.name, **task_node_attrs)
 
-            # add edges
+            # add file_dep nodes
+            fdep_node_attrs = {}
+            fdep_node_attrs.update(node_attrs["file_dep"])
+            for file_dep in task.file_dep:
+                self.graph.add_node(file_dep, **fdep_node_attrs)
+
+            # add target nodes
+            target_node_attrs = {}
+            target_node_attrs.update(node_attrs["target"])
+            for target in task.targets:
+                self.graph.add_node(target, **target_node_attrs)
+
+            # add edges for task dependencies
             for sink_name in task.setup_tasks:
                 self.add_edge(task.name, sink_name, arrowhead='empty')
                 if sink_name not in processed:
@@ -137,6 +171,15 @@ Website/docs: https://github.com/pydoit/doit-graph
                 self.add_edge(task.name, sink_name, arrowhead='')
                 if sink_name not in processed:
                     to_process.append(sink_name)
+
+            # add edges for file dependencies
+            for sink_name in task.file_dep:
+                self.add_data_edge(task.name, sink_name, arrowhead='inv')
+
+            # add edges for targets
+            for sink_name in task.targets:
+                self.add_data_edge(task.name, sink_name, arrowhead='')
+
 
         if not outfile:
             name = pos_args[0] if len(pos_args)==1 else 'tasks'
