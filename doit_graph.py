@@ -56,7 +56,7 @@ opt_outfile = {
 node_attrs = {
     "task": {"color": "lightblue2", "style": "filled"},
     "file_dep": {"color": "orange", "style": "filled"},
-    "target": {"color": "green", "style": "filled"},
+    "target": {"color": "orange", "style": "filled"},
 }
 
 
