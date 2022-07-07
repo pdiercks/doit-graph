@@ -98,17 +98,8 @@ Website/docs: https://github.com/pydoit/doit-graph
         p = pathlib.Path(f)
         return p.name
 
-    def add_edge(self, src_name, sink_name, arrowhead):
-        source = self.task_node(src_name)
-        sink = self.task_node(sink_name)
+    def add_edge(self, source, sink, arrowhead):
         if source != sink and (source, sink) not in self._edges:
-            self._edges.add((source, sink))
-            self.graph.add_edge(source, sink, arrowhead=arrowhead)
-
-    def add_data_edge(self, src_name, sink_name, arrowhead):
-        source = self.task_node(src_name)
-        sink = self.data_node(sink_name)
-        if (source, sink) not in self._edges:
             self._edges.add((source, sink))
             self.graph.add_edge(source, sink, arrowhead=arrowhead)
 
@@ -172,11 +163,15 @@ Website/docs: https://github.com/pydoit/doit-graph
 
             # add edges for file dependencies
             for sink_name in task.file_dep:
-                self.add_data_edge(task.name, sink_name, arrowhead="inv")
+                self.add_edge(
+                    self.data_node(sink_name), self.task_node(task.name), arrowhead=""
+                )
 
             # add edges for targets
             for sink_name in task.targets:
-                self.add_data_edge(task.name, sink_name, arrowhead="")
+                self.add_edge(
+                    self.task_node(task.name), self.data_node(sink_name), arrowhead=""
+                )
 
         if not outfile:
             name = pos_args[0] if len(pos_args) == 1 else "tasks"
